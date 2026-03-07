@@ -13,7 +13,7 @@
  *   - 备用来源：内置模拟价格（基于上次价格 ±1% 随机波动）
  * 
  * 数据库表：wp_fpu_price_history
- *   字段：id, fertilizer_type, region, price, date_recorded, created_at
+ *   字段：id, fertilizer_type, region, price, date_recorded, updated_at
  * 
  * 作者：Manus AI
  * 版本：1.0.0
@@ -361,7 +361,7 @@ function insert_price($pdo, $table, $fertilizer_type, $region, $price, $date) {
             // 插入新记录
             $stmt = $pdo->prepare(
                 "INSERT INTO `{$table}` 
-                 (fertilizer_type, region, price, date_recorded, created_at) 
+                 (fertilizer_type, region, price, date_recorded, updated_at) 
                  VALUES (?, ?, ?, ?, NOW())"
             );
             return $stmt->execute([$fertilizer_type, $region, $price, $date . ' 09:00:00']);
