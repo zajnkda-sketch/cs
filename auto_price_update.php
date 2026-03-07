@@ -22,7 +22,7 @@
  * 宝塔定时任务（每天09:00执行）：
  *   php /www/wwwroot/1112.chaxunwa.com/auto_price_update.php
  *
- * 版本：2.0.0（修复表名和字段名）
+ * 版本：2.2.0（修复今日检查逻辑：改为按品种逐一检查，避免部分品种缺数据时被跳过）
  * 更新：2026-03-07
  */
 
@@ -49,6 +49,7 @@ $PRICE_RANGES = [
 // ============================================================
 
 $today = date('Y-m-d');
+log_msg("========== 开始执行价格更新 ==========");
 log_msg("执行时间: {$today} " . date('H:i:s'));
 
 // 1. 读取 WordPress 数据库配置
@@ -68,22 +69,29 @@ $table_points = $db['prefix'] . 'fertp_price_points';
 $table_items  = $db['prefix'] . 'fertp_price_items';
 log_msg("数据库连接成功，价格表：{$table_points}，今日日期：{$today}");
 
-// 3. 检查今日是否已写入
-if (check_today_data($pdo, $table_points, $today)) {
-    log_msg("今日数据已存在，跳过写入（如需强制更新请删除今日记录后重新运行）");
-    log_msg("========== 执行结束 ==========");
-    exit(0);
-}
+// 3. 确保数据库表存在（兼容首次运行）
+ensure_tables($pdo, $db['prefix']);
 
 // 4. 获取价格（优先网络，失败则模拟）
 log_msg("开始抓取价格数据...");
 $prices = fetch_prices($pdo, $table_points, $table_items, $PRICE_RANGES);
 
-// 5. 写入数据库
+// 5. 逐品种写入数据库（改为按品种检查，避免部分品种缺数据时被整体跳过）
 $success = 0;
+$skipped = 0;
 $fail    = 0;
+
 foreach ($prices as $slug => $price) {
     $name = $PRICE_RANGES[$slug]['name'] ?? $slug;
+
+    // 检查该品种今日是否已有来源为 plugin/auto_script 的记录
+    // 若已有记录则跳过（避免覆盖插件采集的真实数据）
+    if (check_slug_today($pdo, $table_points, $slug, $today)) {
+        log_msg("→ 跳过（今日已有数据）：{$name}（{$slug}）");
+        $skipped++;
+        continue;
+    }
+
     $result = insert_price($pdo, $table_points, $slug, $today, $price);
     if ($result) {
         log_msg("✓ 写入成功：{$name}（{$slug}）= {$price} 元/吨");
@@ -96,7 +104,7 @@ foreach ($prices as $slug => $price) {
     }
 }
 
-log_msg("执行完成：成功 {$success} 条，失败 {$fail} 条");
+log_msg("执行完成：成功 {$success} 条，跳过 {$skipped} 条，失败 {$fail} 条");
 log_msg("========== 执行结束 ==========");
 echo str_repeat('-', 70) . "\n";
 echo "★[" . date('Y-m-d H:i:s') . "] " . ($fail === 0 ? "Successful" : "Completed with {$fail} failures") . "\n";
@@ -166,15 +174,71 @@ function connect_db($db) {
 }
 
 /**
- * 检查今日是否已有数据
+ * 确保数据库表存在（兼容插件未激活时直接运行脚本的场景）
  */
-function check_today_data($pdo, $table, $today) {
+function ensure_tables($pdo, $prefix) {
+    $items_table  = $prefix . 'fertp_price_items';
+    $points_table = $prefix . 'fertp_price_points';
+
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE pdate = ?");
-        $stmt->execute([$today]);
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `{$items_table}` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `slug`       VARCHAR(64)  NOT NULL,
+            `name`       VARCHAR(128) NOT NULL,
+            `unit`       VARCHAR(32)  NOT NULL DEFAULT '元/吨',
+            `category`   VARCHAR(64)  NOT NULL DEFAULT '',
+            `region`     VARCHAR(64)  NOT NULL DEFAULT '',
+            `spec`       VARCHAR(64)  NOT NULL DEFAULT '',
+            `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `slug` (`slug`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `{$points_table}` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `item_slug`  VARCHAR(64)  NOT NULL,
+            `pdate`      DATE         NOT NULL,
+            `price`      DECIMAL(10,2) NOT NULL,
+            `source`     VARCHAR(64)  NOT NULL DEFAULT '',
+            `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `slug_date` (`item_slug`, `pdate`),
+            KEY `pdate` (`pdate`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+        // 预置品种数据
+        $defaults = [
+            ['urea',     '尿素',     '元/吨', 'nitrogen',  '', ''],
+            ['dap',      '磷酸二铵', '元/吨', 'phosphate', '', ''],
+            ['mop',      '氯化钾',   '元/吨', 'potassium', '', ''],
+            ['compound', '复合肥',   '元/吨', 'compound',  '', ''],
+        ];
+        $stmt = $pdo->prepare(
+            "INSERT IGNORE INTO `{$items_table}` (slug, name, unit, category, region, spec) VALUES (?, ?, ?, ?, ?, ?)"
+        );
+        foreach ($defaults as $row) {
+            $stmt->execute($row);
+        }
+
+        log_msg("数据库表检查完成");
+    } catch (PDOException $e) {
+        log_msg('建表失败：' . $e->getMessage(), 'WARN');
+    }
+}
+
+/**
+ * 检查指定品种今日是否已有数据
+ * （修复原版按全部品种检查的问题，改为按 slug 单独检查）
+ */
+function check_slug_today($pdo, $table, $slug, $today) {
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM `{$table}` WHERE item_slug = ? AND pdate = ?"
+        );
+        $stmt->execute([$slug, $today]);
         return (int)$stmt->fetchColumn() > 0;
     } catch (PDOException $e) {
-        log_msg('检查今日数据失败：' . $e->getMessage(), 'WARN');
+        log_msg("检查 {$slug} 今日数据失败：" . $e->getMessage(), 'WARN');
         return false;
     }
 }
