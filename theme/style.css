@@ -1,0 +1,478 @@
+/*
+Theme Name: Fertilizer Price Platform
+Theme URI: https://example.com
+Description: 化肥价格实时数据平台主题
+Version: 1.0.0
+Author: Manus
+License: GPL v2 or later
+*/
+
+:root {
+    --primary-color: #28a745;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f8f9fa;
+}
+
+/* 导航栏 */
+.navbar {
+    border-bottom: 1px solid #e9ecef;
+}
+
+.navbar-brand {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.navbar-brand i {
+    margin-right: 0.5rem;
+}
+
+/* 英雄区域 */
+.hero-section {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    padding: 5rem 0;
+}
+
+.hero-section h1 {
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.hero-section .lead {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+/* 统计卡片 */
+.stats-section {
+    padding: 4rem 0;
+}
+
+.stat-card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+.stat-card h3 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card p {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+/* 价格卡片 */
+.prices-section {
+    padding: 4rem 0;
+}
+
+.price-card {
+    transition: all 0.3s ease;
+    border-top: 3px solid var(--primary-color);
+}
+
+.price-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(40, 167, 69, 0.15) !important;
+}
+
+.price-display {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.price-value {
+    font-size: 2rem;
+}
+
+.price-unit {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.price-change {
+    display: inline-block;
+}
+
+/* 趋势分析 */
+.trend-section {
+    padding: 4rem 0;
+}
+
+.chart-container {
+    background: white;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.btn-group .btn {
+    border-radius: 0.25rem;
+}
+
+.btn-group .btn.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+/* 资讯卡片 */
+.news-section {
+    padding: 4rem 0;
+}
+
+.news-card {
+    transition: all 0.3s ease;
+    border-left: 3px solid var(--primary-color);
+}
+
+.news-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+.news-card .card-title {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+/* 企业卡片 */
+.companies-section {
+    padding: 4rem 0;
+}
+
+.company-card {
+    transition: all 0.3s ease;
+    border-bottom: 3px solid var(--primary-color);
+}
+
+.company-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+.company-card .card-title {
+    font-weight: 600;
+    color: #333;
+}
+
+.products-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/* 页脚 */
+.site-footer {
+    background-color: #212529;
+    margin-top: 4rem;
+}
+
+.site-footer a {
+    transition: color 0.3s ease;
+}
+
+.site-footer a:hover {
+    color: var(--primary-color) !important;
+}
+
+/* 按钮 */
+.btn-success {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #218838;
+}
+
+.btn-outline-success {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-outline-success:hover {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+/* 标题 */
+.section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 2rem;
+    position: relative;
+    padding-bottom: 1rem;
+}
+
+.section-title::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background-color: var(--primary-color);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .hero-section h1 {
+        font-size: 1.8rem;
+    }
+    
+    .hero-section .lead {
+        font-size: 1rem;
+    }
+    
+    .stat-card h3 {
+        font-size: 2rem;
+    }
+    
+    .section-title {
+        font-size: 1.5rem;
+    }
+    
+    .price-value {
+        font-size: 1.5rem;
+    }
+    
+    .btn-group {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+    
+    .btn-group .btn {
+        flex: 1;
+    }
+    
+    /* 价格卡片移动端优化 - 改为上下展示 */
+    .prices-section .row > div {
+        display: block !important;
+    }
+    
+    .price-card {
+        margin-bottom: 1rem;
+        width: 100%;
+    }
+    
+    /* 确保在超小屏幕上也是上下展示 */
+    .col-md-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* 价格显示优化 */
+    .price-display {
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .price-value {
+        font-size: 2rem;
+        width: 100%;
+    }
+    
+    .price-unit {
+        font-size: 1rem;
+        width: 100%;
+    }
+    
+    /* 图表容器高度优化 */
+    .chart-container {
+        height: 500px !important;
+        padding: 1rem;
+    }
+    
+    /* 图表按钮优化 */
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-group .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+        flex: none;
+    }
+}
+
+/* 超小屏幕优化 (< 576px) */
+@media (max-width: 576px) {
+    .prices-section .row > div {
+        display: block !important;
+    }
+    
+    .col-md-4,
+    .col-lg-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+    
+    .price-card {
+        margin-bottom: 1.5rem;
+    }
+    
+    .price-value {
+        font-size: 1.8rem;
+    }
+    
+    .chart-container {
+        height: 600px !important;
+        padding: 0.5rem;
+    }
+    
+    .chart-container canvas {
+        max-width: 100%;
+        height: auto !important;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* 搜索表单 */
+.subscribe-form {
+    width: 100%;
+}
+
+.subscribe-form .input-group {
+    width: 100%;
+}
+
+.subscribe-form input {
+    border-color: #495057;
+}
+
+.subscribe-form input::placeholder {
+    color: #adb5bd;
+}
+
+/* 加载动画 */
+.loading {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 打印样式 */
+@media print {
+    .navbar, .site-footer {
+        display: none;
+    }
+}
+
+/* 隐藏搜索表单 */
+form.d-flex.ms-3 {
+    display: none !important;
+}
+
+.navbar form[method="get"] {
+    display: none !important;
+}
+
+.navbar-collapse form {
+    display: none !important;
+}
+
+/* 移动端强制优化 - 针对col-md-3 */
+@media (max-width: 991px) {
+    .col-md-3, .col-md-4, .col-lg-3, .col-lg-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        margin-bottom: 1.5rem !important;
+    }
+    .prices-section .row {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .chart-container {
+        height: 500px !important;
+    }
+    .btn-group {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+    }
+    .btn-group .btn {
+        width: 100% !important;
+        margin-bottom: 0.5rem !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .col-md-3, .col-md-4, .col-lg-3, .col-lg-4, .col-sm-6 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        margin-bottom: 1.5rem !important;
+    }
+    .chart-container {
+        height: 500px !important;
+    }
+}
+
+@media (max-width: 575px) {
+    .col-md-3, .col-md-4, .col-lg-3, .col-lg-4, .col-sm-6 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        margin-bottom: 1.5rem !important;
+    }
+    .chart-container {
+        height: 600px !important;
+    }
+}
