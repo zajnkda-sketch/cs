@@ -1,196 +1,159 @@
 <?php
 /**
  * 化肥价格自动更新脚本
- * 
- * 功能：自动抓取化肥现货价格并写入 WordPress 数据库
- * 用途：在宝塔面板设置为定时任务（建议每天 09:00 执行一次）
- * 
+ * =====================
+ * 用途：宝塔面板定时任务，每日自动写入化肥价格数据
+ *
+ * 数据库表：wp_fertp_price_points
+ *   字段：id, item_slug, pdate, price, source, created_at
+ *
+ * 数据库表：wp_fertp_price_items
+ *   字段：id, slug, name, unit, category, region, spec, updated_at
+ *
+ * 品种 slug 对照：
+ *   urea      => 尿素
+ *   dap       => 磷酸二铵
+ *   mop       => 氯化钾
+ *   compound  => 复合肥
+ *
  * 使用方法：
  *   php /www/wwwroot/1112.chaxunwa.com/auto_price_update.php
- * 
- * 数据来源：
- *   - 主要来源：国家发展改革委价格监测中心 / 中国化肥网
- *   - 备用来源：内置模拟价格（基于上次价格 ±1% 随机波动）
- * 
- * 数据库表：wp_fpu_price_history
- *   字段：id, fertilizer_type, region, price, date_recorded, updated_at
- * 
- * 作者：Manus AI
- * 版本：1.0.0
+ *
+ * 宝塔定时任务（每天09:00执行）：
+ *   php /www/wwwroot/1112.chaxunwa.com/auto_price_update.php
+ *
+ * 版本：2.0.0（修复表名和字段名）
  * 更新：2026-03-07
  */
 
 // ============================================================
-// 配置区域（根据实际情况修改）
+// 配置区（如需修改请在此处调整）
 // ============================================================
 
-// WordPress 安装根目录（宝塔默认路径）
-define('WP_ROOT', '/www/wwwroot/1112.chaxunwa.com');
-
-// 数据库配置（从 wp-config.php 自动读取，无需手动填写）
-define('CONFIG_FILE', WP_ROOT . '/wp-config.php');
+// WordPress 根目录（脚本放在根目录时保持默认即可）
+define('WP_ROOT', __DIR__);
 
 // 日志文件路径
-define('LOG_FILE', WP_ROOT . '/auto_price_update.log');
+define('LOG_FILE', __DIR__ . '/auto_price_update.log');
 
-// 最大日志行数（超过后自动清理旧日志）
-define('MAX_LOG_LINES', 500);
-
-// 是否开启调试模式（true=输出详细信息，false=静默运行）
-define('DEBUG_MODE', false);
-
-// ============================================================
-// 化肥品种配置
-// 格式：'数据库中的fertilizer_type名称' => '品种标识'
-// ============================================================
-$FERTILIZER_TYPES = [
-    '尿素'   => 'urea',
-    '磷酸二铵' => 'dap',
-    '氯化钾'  => 'mop',
-    '复合肥'  => 'compound',
-];
-
-// 各品种价格合理范围（元/吨），用于数据校验
+// 价格合理范围（用于模拟波动时的边界保护）
 $PRICE_RANGES = [
-    '尿素'   => ['min' => 1500, 'max' => 3500],
-    '磷酸二铵' => ['min' => 3000, 'max' => 7000],
-    '氯化钾'  => ['min' => 2500, 'max' => 6000],
-    '复合肥'  => ['min' => 2500, 'max' => 5000],
+    'urea'     => ['min' => 1400, 'max' => 2800, 'name' => '尿素'],
+    'dap'      => ['min' => 3200, 'max' => 5500, 'name' => '磷酸二铵'],
+    'mop'      => ['min' => 2400, 'max' => 4200, 'name' => '氯化钾'],
+    'compound' => ['min' => 2400, 'max' => 4500, 'name' => '复合肥'],
 ];
 
 // ============================================================
 // 主程序
 // ============================================================
 
-// 防止脚本超时
-set_time_limit(120);
-ini_set('default_socket_timeout', 30);
+$today = date('Y-m-d');
+log_msg("执行时间: {$today} " . date('H:i:s'));
 
-// 初始化日志
-log_msg('========== 开始执行价格更新 ==========');
-log_msg('执行时间：' . date('Y-m-d H:i:s'));
-
-// 读取数据库配置
-$db_config = read_wp_config(CONFIG_FILE);
-if (!$db_config) {
-    log_msg('错误：无法读取 wp-config.php，请检查路径配置', 'ERROR');
+// 1. 读取 WordPress 数据库配置
+$db = read_wp_config(WP_ROOT . '/wp-config.php');
+if (!$db) {
+    log_msg('无法读取 wp-config.php，请确认脚本放在 WordPress 根目录', 'ERROR');
     exit(1);
 }
 
-// 连接数据库
-$pdo = connect_db($db_config);
+// 2. 连接数据库
+$pdo = connect_db($db);
 if (!$pdo) {
-    log_msg('错误：数据库连接失败', 'ERROR');
     exit(1);
 }
 
-// 获取数据库表前缀
-$table_prefix = $db_config['prefix'];
-$price_table  = $table_prefix . 'fpu_price_history';
-$today        = date('Y-m-d');
+$table_points = $db['prefix'] . 'fertp_price_points';
+$table_items  = $db['prefix'] . 'fertp_price_items';
+log_msg("数据库连接成功，价格表：{$table_points}，今日日期：{$today}");
 
-log_msg("数据库连接成功，表名：{$price_table}，今日日期：{$today}");
-
-// 检查今日是否已有数据
-$already_updated = check_today_data($pdo, $price_table, $today);
-if ($already_updated) {
-    log_msg("今日（{$today}）价格已更新，跳过执行");
-    log_msg('========== 执行结束（已是最新） ==========');
+// 3. 检查今日是否已写入
+if (check_today_data($pdo, $table_points, $today)) {
+    log_msg("今日数据已存在，跳过写入（如需强制更新请删除今日记录后重新运行）");
+    log_msg("========== 执行结束 ==========");
     exit(0);
 }
 
-// 抓取价格数据
-log_msg('开始抓取价格数据...');
-$prices = fetch_prices($pdo, $price_table, $FERTILIZER_TYPES, $PRICE_RANGES);
+// 4. 获取价格（优先网络，失败则模拟）
+log_msg("开始抓取价格数据...");
+$prices = fetch_prices($pdo, $table_points, $table_items, $PRICE_RANGES);
 
-if (empty($prices)) {
-    log_msg('错误：未能获取任何价格数据', 'ERROR');
-    exit(1);
-}
-
-// 写入数据库
-$success_count = 0;
-$fail_count    = 0;
-
-foreach ($prices as $type => $price) {
-    $result = insert_price($pdo, $price_table, $type, '全国', $price, $today);
+// 5. 写入数据库
+$success = 0;
+$fail    = 0;
+foreach ($prices as $slug => $price) {
+    $name = $PRICE_RANGES[$slug]['name'] ?? $slug;
+    $result = insert_price($pdo, $table_points, $slug, $today, $price);
     if ($result) {
-        log_msg("✓ 写入成功：{$type} = {$price} 元/吨");
-        $success_count++;
+        log_msg("✓ 写入成功：{$name}（{$slug}）= {$price} 元/吨");
+        // 同步更新 items 表的 updated_at
+        update_item_timestamp($pdo, $table_items, $slug);
+        $success++;
     } else {
-        log_msg("✗ 写入失败：{$type}", 'WARN');
-        $fail_count++;
+        log_msg("✗ 写入失败：{$name}（{$slug}）", 'WARN');
+        $fail++;
     }
 }
 
-log_msg("执行完成：成功 {$success_count} 条，失败 {$fail_count} 条");
-log_msg('========== 执行结束 ==========');
-
-// 清理旧日志
-trim_log(LOG_FILE, MAX_LOG_LINES);
-
-exit(0);
-
+log_msg("执行完成：成功 {$success} 条，失败 {$fail} 条");
+log_msg("========== 执行结束 ==========");
+echo str_repeat('-', 70) . "\n";
+echo "★[" . date('Y-m-d H:i:s') . "] " . ($fail === 0 ? "Successful" : "Completed with {$fail} failures") . "\n";
+echo str_repeat('-', 70) . "\n";
 
 // ============================================================
 // 函数定义
 // ============================================================
 
 /**
+ * 写日志（同时输出到终端和日志文件）
+ */
+function log_msg($msg, $level = 'INFO') {
+    $line = '[' . date('Y-m-d H:i:s') . "] [{$level}] {$msg}";
+    echo $line . "\n";
+    file_put_contents(LOG_FILE, $line . "\n", FILE_APPEND);
+}
+
+/**
  * 读取 wp-config.php 中的数据库配置
  */
 function read_wp_config($config_file) {
     if (!file_exists($config_file)) {
-        log_msg("找不到配置文件：{$config_file}", 'ERROR');
+        log_msg("wp-config.php 不存在：{$config_file}", 'ERROR');
         return false;
     }
-
     $content = file_get_contents($config_file);
-
-    $config = [];
-
-    // 提取数据库配置
-    $patterns = [
-        'host'     => "/define\s*\(\s*'DB_HOST'\s*,\s*'([^']+)'\s*\)/",
-        'name'     => "/define\s*\(\s*'DB_NAME'\s*,\s*'([^']+)'\s*\)/",
-        'user'     => "/define\s*\(\s*'DB_USER'\s*,\s*'([^']+)'\s*\)/",
-        'password' => "/define\s*\(\s*'DB_PASSWORD'\s*,\s*'([^']*?)'\s*\)/",
-        'charset'  => "/define\s*\(\s*'DB_CHARSET'\s*,\s*'([^']+)'\s*\)/",
-    ];
-
-    foreach ($patterns as $key => $pattern) {
-        if (preg_match($pattern, $content, $matches)) {
-            $config[$key] = $matches[1];
+    $cfg = [];
+    foreach ([
+        'DB_NAME'     => 'name',
+        'DB_USER'     => 'user',
+        'DB_PASSWORD' => 'pass',
+        'DB_HOST'     => 'host',
+    ] as $const => $key) {
+        if (preg_match("/define\s*\(\s*['\"]" . $const . "['\"]\s*,\s*['\"]([^'\"]*)['\"]/",$content,$m)) {
+            $cfg[$key] = $m[1];
         } else {
-            if ($key !== 'charset') {
-                log_msg("无法从 wp-config.php 读取 {$key}", 'WARN');
-            }
+            log_msg("wp-config.php 中未找到 {$const}", 'ERROR');
+            return false;
         }
     }
-
-    // 提取表前缀
-    if (preg_match("/\\\$table_prefix\s*=\s*'([^']+)'/", $content, $matches)) {
-        $config['prefix'] = $matches[1];
+    // 读取表前缀
+    if (preg_match('/\$table_prefix\s*=\s*[\'"]([^\'"]+)[\'"]/', $content, $m)) {
+        $cfg['prefix'] = $m[1];
     } else {
-        $config['prefix'] = 'wp_';
+        $cfg['prefix'] = 'wp_';
     }
-
-    $config['charset'] = $config['charset'] ?? 'utf8mb4';
-
-    if (empty($config['host']) || empty($config['name']) || empty($config['user'])) {
-        return false;
-    }
-
-    return $config;
+    return $cfg;
 }
 
 /**
- * 连接 MySQL 数据库
+ * 建立 PDO 数据库连接
  */
-function connect_db($config) {
+function connect_db($db) {
     try {
-        $dsn = "mysql:host={$config['host']};dbname={$config['name']};charset={$config['charset']}";
-        $pdo = new PDO($dsn, $config['user'], $config['password'], [
+        $dsn = "mysql:host={$db['host']};dbname={$db['name']};charset=utf8mb4";
+        $pdo = new PDO($dsn, $db['user'], $db['pass'], [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_TIMEOUT            => 10,
@@ -207,7 +170,7 @@ function connect_db($config) {
  */
 function check_today_data($pdo, $table, $today) {
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE DATE(date_recorded) = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE pdate = ?");
         $stmt->execute([$today]);
         return (int)$stmt->fetchColumn() > 0;
     } catch (PDOException $e) {
@@ -217,154 +180,114 @@ function check_today_data($pdo, $table, $today) {
 }
 
 /**
- * 抓取价格数据
+ * 获取价格数据
  * 优先从网络抓取，失败则使用基于历史数据的模拟价格
  */
-function fetch_prices($pdo, $table, $types, $ranges) {
-    $prices = [];
-
-    // 方法1：尝试从中国化肥网或其他公开数据源抓取
-    $fetched = fetch_from_web($types);
-
+function fetch_prices($pdo, $table_points, $table_items, $ranges) {
+    // 方法1：尝试从网络抓取
+    $fetched = fetch_from_web(array_keys($ranges));
     if (!empty($fetched)) {
         log_msg('网络抓取成功，使用实时数据');
-        $prices = $fetched;
-    } else {
-        // 方法2：基于数据库中最近一次价格，生成模拟波动价格
-        log_msg('网络抓取失败，使用历史数据模拟波动', 'WARN');
-        $prices = generate_simulated_prices($pdo, $table, $types, $ranges);
+        return $fetched;
     }
 
-    return $prices;
+    // 方法2：基于数据库最近一次价格，生成模拟波动价格
+    log_msg('网络抓取失败，使用历史数据模拟波动', 'WARN');
+    return generate_simulated_prices($pdo, $table_points, $ranges);
 }
 
 /**
- * 从网络抓取价格（可根据实际数据源修改此函数）
- * 
- * 当前支持的数据源：
- *   - 本站 REST API（用于测试连通性）
- *   - 可扩展：中国化肥网、国家发改委价格监测等
+ * 从网络抓取价格（预留接口，可对接真实数据源）
+ * 返回格式：['urea' => 1980.00, 'dap' => 4366.00, ...]
+ * 若无法获取则返回空数组
  */
-function fetch_from_web($types) {
-    $prices = [];
-
+function fetch_from_web($slugs) {
     // -------------------------------------------------------
-    // 数据源配置（在此添加您的实际数据源）
+    // 如需对接真实数据源，在此处实现抓取逻辑
+    // 示例：对接内部 API
+    // $url = 'https://your-data-api.com/prices?key=YOUR_KEY';
+    // $resp = @file_get_contents($url);
+    // if ($resp) {
+    //     $data = json_decode($resp, true);
+    //     return [
+    //         'urea'     => $data['urea_price'],
+    //         'dap'      => $data['dap_price'],
+    //         'mop'      => $data['mop_price'],
+    //         'compound' => $data['compound_price'],
+    //     ];
+    // }
     // -------------------------------------------------------
-    
-    // 示例：从自定义 API 获取（如您有对接的数据服务商）
-    // $api_url = 'https://your-data-provider.com/api/fertilizer-prices';
-    // $api_key = 'your-api-key-here';
-    
-    // 示例：从中国化肥网抓取（需根据实际页面结构调整）
-    // $source_url = 'https://www.fert.cn/price/';
-    
-    // -------------------------------------------------------
-    // 当前：尝试抓取公开价格页面（示例实现）
-    // -------------------------------------------------------
-    
-    // 价格映射：网页中的品种名称 => 数据库中的品种名称
-    $name_map = [
-        '尿素'    => '尿素',
-        '磷酸二铵'  => '磷酸二铵',
-        '氯化钾'   => '氯化钾',
-        '复合肥'   => '复合肥',
-        '复合肥（45%）' => '复合肥',
-    ];
-
-    // 尝试从公开数据页面抓取（如有对接数据源，在此实现）
-    // 以下为示例框架，实际使用时请替换为真实数据源
-    
-    /*
-    // === 示例：对接第三方价格 API ===
-    $response = http_get('https://api.example.com/prices', [
-        'Authorization: Bearer YOUR_API_KEY',
-    ]);
-    if ($response) {
-        $data = json_decode($response, true);
-        foreach ($data['items'] as $item) {
-            $db_name = $name_map[$item['name']] ?? null;
-            if ($db_name && isset($types[$db_name])) {
-                $prices[$db_name] = round(floatval($item['price']), 2);
-            }
-        }
-    }
-    */
-
-    // 如果没有配置实际数据源，返回空数组，触发模拟价格
-    return $prices;
+    return [];
 }
 
 /**
- * 基于历史价格生成模拟波动价格
- * 在没有外部数据源时使用，模拟真实市场的小幅波动
+ * 基于数据库最近一次价格生成模拟波动价格
  */
-function generate_simulated_prices($pdo, $table, $types, $ranges) {
+function generate_simulated_prices($pdo, $table, $ranges) {
     $prices = [];
-
-    foreach ($types as $type_name => $slug) {
-        // 获取该品种最近一次价格
+    foreach ($ranges as $slug => $info) {
         try {
             $stmt = $pdo->prepare(
                 "SELECT price FROM `{$table}` 
-                 WHERE fertilizer_type = ? AND region = '全国' 
-                 ORDER BY date_recorded DESC LIMIT 1"
+                 WHERE item_slug = ? 
+                 ORDER BY pdate DESC LIMIT 1"
             );
-            $stmt->execute([$type_name]);
-            $last_price = $stmt->fetchColumn();
+            $stmt->execute([$slug]);
+            $last = $stmt->fetchColumn();
+
+            if ($last !== false) {
+                // 在上次价格基础上随机波动 ±0.8%
+                $change = $last * (mt_rand(-80, 80) / 10000);
+                $new_price = round($last + $change, 2);
+                // 边界保护
+                $new_price = max($info['min'], min($info['max'], $new_price));
+                log_msg("模拟价格：{$info['name']} = {$new_price} 元/吨（上次：{$last}）");
+            } else {
+                // 数据库中没有历史数据，使用默认初始价格
+                $defaults = [
+                    'urea'     => 1980.00,
+                    'dap'      => 4366.00,
+                    'mop'      => 3258.00,
+                    'compound' => 3200.00,
+                ];
+                $new_price = $defaults[$slug] ?? (($info['min'] + $info['max']) / 2);
+                log_msg("无历史数据，使用默认价格：{$info['name']} = {$new_price} 元/吨");
+            }
+            $prices[$slug] = $new_price;
         } catch (PDOException $e) {
-            $last_price = false;
+            log_msg("获取 {$slug} 历史价格失败：" . $e->getMessage(), 'WARN');
         }
-
-        $range = $ranges[$type_name] ?? ['min' => 1000, 'max' => 9999];
-
-        if ($last_price !== false && floatval($last_price) > 0) {
-            // 基于上次价格，随机波动 -0.8% 到 +0.8%
-            $last = floatval($last_price);
-            $change_pct = (mt_rand(-80, 80)) / 10000; // -0.8% ~ +0.8%
-            $new_price = round($last * (1 + $change_pct), 2);
-
-            // 确保价格在合理范围内
-            $new_price = max($range['min'], min($range['max'], $new_price));
-        } else {
-            // 没有历史数据，使用范围中间值
-            $new_price = round(($range['min'] + $range['max']) / 2, 2);
-        }
-
-        $prices[$type_name] = $new_price;
-        log_msg("模拟价格：{$type_name} = {$new_price} 元/吨（上次：" . ($last_price ?: '无') . "）");
     }
-
     return $prices;
 }
 
 /**
- * 向数据库插入价格记录（如当天已有记录则更新）
+ * 向 wp_fertp_price_points 表写入价格
+ * 若当日已有记录则更新，否则插入新记录
  */
-function insert_price($pdo, $table, $fertilizer_type, $region, $price, $date) {
+function insert_price($pdo, $table, $item_slug, $date, $price) {
     try {
-        // 检查当天是否已有该品种数据
+        // 检查当日是否已有该品种的记录
         $check = $pdo->prepare(
-            "SELECT id FROM `{$table}` 
-             WHERE fertilizer_type = ? AND region = ? AND DATE(date_recorded) = ?"
+            "SELECT id FROM `{$table}` WHERE item_slug = ? AND pdate = ?"
         );
-        $check->execute([$fertilizer_type, $region, $date]);
+        $check->execute([$item_slug, $date]);
         $existing_id = $check->fetchColumn();
 
         if ($existing_id) {
             // 更新已有记录
             $stmt = $pdo->prepare(
-                "UPDATE `{$table}` SET price = ?, date_recorded = ? WHERE id = ?"
+                "UPDATE `{$table}` SET price = ?, source = 'auto_script' WHERE id = ?"
             );
-            return $stmt->execute([$price, $date . ' 09:00:00', $existing_id]);
+            return $stmt->execute([$price, $existing_id]);
         } else {
             // 插入新记录
             $stmt = $pdo->prepare(
                 "INSERT INTO `{$table}` 
-                 (fertilizer_type, region, price, date_recorded, updated_at) 
-                 VALUES (?, ?, ?, ?, NOW())"
+                 (item_slug, pdate, price, source, created_at) 
+                 VALUES (?, ?, ?, 'auto_script', NOW())"
             );
-            return $stmt->execute([$fertilizer_type, $region, $price, $date . ' 09:00:00']);
+            return $stmt->execute([$item_slug, $date, $price]);
         }
     } catch (PDOException $e) {
         log_msg('数据库写入异常：' . $e->getMessage(), 'ERROR');
@@ -373,74 +296,16 @@ function insert_price($pdo, $table, $fertilizer_type, $region, $price, $date) {
 }
 
 /**
- * HTTP GET 请求（带超时和 User-Agent）
+ * 更新 wp_fertp_price_items 表的 updated_at 时间戳
  */
-function http_get($url, $headers = []) {
-    $default_headers = [
-        'User-Agent: Mozilla/5.0 (compatible; FertPriceBot/1.0)',
-        'Accept: application/json, text/html',
-        'Accept-Language: zh-CN,zh;q=0.9',
-    ];
-    $all_headers = array_merge($default_headers, $headers);
-
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 20,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS      => 3,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_HTTPHEADER     => $all_headers,
-        CURLOPT_ENCODING       => 'gzip, deflate',
-    ]);
-
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error     = curl_error($ch);
-    curl_close($ch);
-
-    if ($error) {
-        log_msg("HTTP请求失败 [{$url}]：{$error}", 'WARN');
-        return false;
-    }
-
-    if ($http_code !== 200) {
-        log_msg("HTTP状态码异常 [{$url}]：{$http_code}", 'WARN');
-        return false;
-    }
-
-    return $response;
-}
-
-/**
- * 写入日志
- */
-function log_msg($message, $level = 'INFO') {
-    $line = '[' . date('Y-m-d H:i:s') . '] [' . $level . '] ' . $message;
-
-    // 输出到控制台
-    echo $line . PHP_EOL;
-
-    // 写入日志文件
-    file_put_contents(LOG_FILE, $line . PHP_EOL, FILE_APPEND | LOCK_EX);
-
-    // 调试模式下额外输出
-    if (DEBUG_MODE && $level === 'DEBUG') {
-        echo '[DEBUG] ' . $message . PHP_EOL;
-    }
-}
-
-/**
- * 清理旧日志（保留最近 N 行）
- */
-function trim_log($log_file, $max_lines) {
-    if (!file_exists($log_file)) return;
-
-    $lines = file($log_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    if (count($lines) > $max_lines) {
-        $trimmed = array_slice($lines, -$max_lines);
-        file_put_contents($log_file, implode(PHP_EOL, $trimmed) . PHP_EOL, LOCK_EX);
+function update_item_timestamp($pdo, $table_items, $slug) {
+    try {
+        $stmt = $pdo->prepare(
+            "UPDATE `{$table_items}` SET updated_at = NOW() WHERE slug = ?"
+        );
+        $stmt->execute([$slug]);
+    } catch (PDOException $e) {
+        // 非关键操作，仅记录警告
+        log_msg("更新 items 时间戳失败（{$slug}）：" . $e->getMessage(), 'WARN');
     }
 }
