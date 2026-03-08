@@ -1,0 +1,16 @@
+/* 数据采集插件后台样式 */
+.cdcr-wrap { max-width: 1200px; }
+.cdcr-notice { background: #FFF8E1; border-left: 4px solid #FFC107; padding: 12px 16px; border-radius: 4px; margin-bottom: 16px; font-size: 14px; }
+.cdcr-table th, .cdcr-table td { vertical-align: middle; }
+.cdcr-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.cdcr-status-active  { background: #E8F5E9; color: #2E7D32; }
+.cdcr-status-paused  { background: #FFF3E0; color: #E65100; }
+.cdcr-status-success { background: #E8F5E9; color: #2E7D32; }
+.cdcr-status-warning { background: #FFF8E1; color: #F57F17; }
+.cdcr-status-error   { background: #FFEBEE; color: #C62828; }
+.cdcr-status-blocked { background: #FCE4EC; color: #880E4F; }
+.cdcr-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.cdcr-form-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; }
+.cdcr-form-section h2 { font-size: 16px; margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 12px; }
+.cdcr-tip { font-size: 12px; color: #999; font-weight: 400; }
+@media (max-width: 960px) { .cdcr-form-grid { grid-template-columns: 1fr; } }
