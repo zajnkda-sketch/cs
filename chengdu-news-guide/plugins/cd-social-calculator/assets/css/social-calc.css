@@ -1,0 +1,207 @@
+/* 成都五险一金计算工具样式 */
+
+.cd-social-calculator {
+    max-width: 900px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.cd-social-calculator h2 {
+    font-size: 22px;
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+.calc-note {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 24px;
+}
+
+/* 计算表单 */
+.calc-form {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.form-row label {
+    width: 220px;
+    font-size: 14px;
+    color: #555;
+    flex-shrink: 0;
+}
+
+.form-row input[type="number"],
+.form-row select {
+    flex: 1;
+    min-width: 160px;
+    max-width: 300px;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-row input[type="number"]:focus,
+.form-row select:focus {
+    border-color: #3498db;
+}
+
+.form-row .hint {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.btn-primary {
+    padding: 12px 32px;
+    background: #3498db;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 8px;
+}
+
+.btn-primary:hover {
+    background: #2980b9;
+}
+
+.btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+/* 计算结果 */
+.calc-result {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.calc-result h3 {
+    font-size: 18px;
+    color: #2c3e50;
+    margin-bottom: 20px;
+}
+
+/* 汇总数据 */
+.result-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.result-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+
+.result-item.highlight {
+    background: #ebf5fb;
+    border: 1px solid #aed6f1;
+}
+
+.result-item .label {
+    display: block;
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 8px;
+}
+
+.result-item .value {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.result-item.highlight .value {
+    color: #2980b9;
+    font-size: 26px;
+}
+
+/* 明细表格 */
+.result-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.result-detail-table th,
+.result-detail-table td {
+    padding: 10px 12px;
+    text-align: right;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.result-detail-table th:first-child,
+.result-detail-table td:first-child {
+    text-align: left;
+}
+
+.result-detail-table th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #555;
+}
+
+.result-detail-table tr:hover {
+    background: #fafafa;
+}
+
+.result-disclaimer {
+    font-size: 12px;
+    color: #aaa;
+    margin-top: 12px;
+}
+
+/* 响应式适配 */
+@media (max-width: 640px) {
+    .form-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .form-row label {
+        width: auto;
+    }
+
+    .form-row input[type="number"],
+    .form-row select {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .result-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .result-detail-table {
+        font-size: 12px;
+    }
+
+    .result-detail-table th,
+    .result-detail-table td {
+        padding: 8px 6px;
+    }
+}
