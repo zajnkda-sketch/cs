@@ -1,0 +1,302 @@
+/*
+Theme Name:  成都生活圈
+Theme URI:   https://github.com/zajnkda-sketch/cs
+Description: 清新卡片风格的成都本地资讯门户主题，包含限行查询、五险一金计算等实用工具。
+Version:     1.0.0
+Author:      Manus AI
+Author URI:  https://manus.im
+License:     GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: chengdu-life
+Tags:        news, local, portal, responsive, custom-colors
+*/
+
+/* ============================================================
+   CSS 自定义属性（设计令牌）
+   ============================================================ */
+:root {
+    /* 主色调 - 暖橙渐变 */
+    --color-primary-start: #FF8C00;
+    --color-primary-end:   #FF5252;
+    --color-primary:       #FF7A1A;
+
+    /* 分类色 */
+    --color-traffic:   #4FC3F7;
+    --color-social:    #66BB6A;
+    --color-gov:       #FF8A65;
+    --color-edu:       #AB47BC;
+    --color-food:      #F06292;
+    --color-travel:    #26C6DA;
+    --color-news:      #78909C;
+    --color-life:      #FFA726;
+
+    /* 中性色 */
+    --color-text-primary:   #2D2D2D;
+    --color-text-secondary: #666666;
+    --color-text-muted:     #999999;
+    --color-bg-page:        #F7F8FA;
+    --color-bg-card:        #FFFFFF;
+    --color-border:         #EEEEEE;
+
+    /* 间距 */
+    --spacing-xs:  4px;
+    --spacing-sm:  8px;
+    --spacing-md:  16px;
+    --spacing-lg:  24px;
+    --spacing-xl:  40px;
+    --spacing-2xl: 64px;
+
+    /* 圆角 */
+    --radius-sm:   6px;
+    --radius-md:   12px;
+    --radius-lg:   20px;
+    --radius-full: 9999px;
+
+    /* 阴影 */
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+
+    /* 字体 */
+    --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
+
+    /* 过渡 */
+    --transition: 0.2s ease;
+
+    /* 容器宽度 */
+    --container-max: 1280px;
+    --container-pad: 20px;
+}
+
+/* ============================================================
+   重置 & 基础
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-page);
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+a:hover { color: var(--color-primary); }
+
+img { max-width: 100%; height: auto; display: block; }
+
+ul, ol { list-style: none; }
+
+button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+    border: none;
+}
+
+/* ============================================================
+   工具类
+   ============================================================ */
+.container {
+    max-width: var(--container-max);
+    margin: 0 auto;
+    padding: 0 var(--container-pad);
+}
+
+.sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+.text-center { text-align: center; }
+.text-muted  { color: var(--color-text-muted); }
+
+/* 渐变文字 */
+.gradient-text {
+    background: linear-gradient(135deg, var(--color-primary-start), var(--color-primary-end));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ============================================================
+   卡片基础样式
+   ============================================================ */
+.card {
+    background: var(--color-bg-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+/* ============================================================
+   按钮
+   ============================================================ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: 10px 24px;
+    border-radius: var(--radius-full);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--color-primary-start), var(--color-primary-end));
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(255,140,0,0.35);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 6px 18px rgba(255,140,0,0.45);
+    transform: translateY(-1px);
+    color: #fff;
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--color-primary);
+    border: 2px solid var(--color-primary);
+}
+
+.btn-outline:hover {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+/* ============================================================
+   标签 / 徽章
+   ============================================================ */
+.tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tag-traffic { background: rgba(79,195,247,0.15); color: #0288D1; }
+.tag-social  { background: rgba(102,187,106,0.15); color: #2E7D32; }
+.tag-gov     { background: rgba(255,138,101,0.15); color: #D84315; }
+.tag-edu     { background: rgba(171,71,188,0.15);  color: #6A1B9A; }
+.tag-food    { background: rgba(240,98,146,0.15);  color: #AD1457; }
+.tag-travel  { background: rgba(38,198,218,0.15);  color: #00838F; }
+.tag-news    { background: rgba(120,144,156,0.15); color: #455A64; }
+.tag-life    { background: rgba(255,167,38,0.15);  color: #E65100; }
+
+/* ============================================================
+   分区标题
+   ============================================================ */
+.section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+}
+
+.section-title::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 22px;
+    border-radius: 2px;
+    background: linear-gradient(to bottom, var(--color-primary-start), var(--color-primary-end));
+}
+
+/* ============================================================
+   分页
+   ============================================================ */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-xl);
+}
+
+.pagination a,
+.pagination span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition);
+}
+
+.pagination a:hover,
+.pagination .current {
+    background: linear-gradient(135deg, var(--color-primary-start), var(--color-primary-end));
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(255,140,0,0.3);
+}
+
+/* ============================================================
+   表单元素
+   ============================================================ */
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 15px;
+    color: var(--color-text-primary);
+    background: var(--color-bg-card);
+    transition: border-color var(--transition);
+}
+
+.form-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(255,140,0,0.12);
+}
+
+.form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+}
+
+/* ============================================================
+   响应式断点
+   ============================================================ */
+@media (max-width: 1024px) {
+    :root { --container-pad: 16px; }
+}
+
+@media (max-width: 768px) {
+    :root { --container-pad: 14px; }
+    .section-title { font-size: 18px; }
+}
+
+@media (max-width: 480px) {
+    :root { --container-pad: 12px; }
+}
