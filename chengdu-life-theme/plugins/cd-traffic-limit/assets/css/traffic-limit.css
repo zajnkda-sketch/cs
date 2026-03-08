@@ -1,0 +1,122 @@
+/* 成都限行查询插件样式 */
+.cdt-wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+
+/* 通用卡片 */
+.cdt-today-card, .cdt-checker-card, .cdt-preview-card, .cdt-rules-card {
+    background: #fff; border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08); overflow: hidden;
+}
+
+/* 今日限行卡片 */
+.cdt-today-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 24px 28px; background: linear-gradient(135deg, #FF8C00, #FF5252);
+    color: #fff;
+}
+.cdt-today-icon { font-size: 36px; }
+.cdt-today-title { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+.cdt-today-date  { font-size: 14px; opacity: 0.85; margin: 0; }
+.cdt-today-badge {
+    margin-left: auto; background: rgba(255,255,255,0.25);
+    padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;
+}
+
+.cdt-today-nums {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    padding: 32px 28px 16px;
+}
+.cdt-num-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: linear-gradient(135deg, #FF5252, #FF1744);
+    color: #fff; font-size: 36px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(255,82,82,0.4);
+}
+
+.cdt-today-info { padding: 0 28px 28px; display: flex; flex-direction: column; gap: 10px; }
+.cdt-info-row { font-size: 15px; color: #555; display: flex; align-items: center; gap: 8px; }
+.cdt-info-row i { color: #FF8C00; width: 16px; }
+
+.cdt-no-limit { text-align: center; padding: 40px 28px; }
+.cdt-no-limit-icon { font-size: 56px; display: block; margin-bottom: 12px; }
+.cdt-no-limit h3 { font-size: 24px; font-weight: 700; color: #2E7D32; margin: 0 0 8px; }
+.cdt-no-limit p  { color: #666; font-size: 15px; margin: 0; }
+
+/* 查询表单 */
+.cdt-checker-card { padding: 28px; }
+.cdt-section-title { font-size: 18px; font-weight: 700; color: #2D2D2D; display: flex; align-items: center; gap: 8px; margin: 0 0 20px; }
+.cdt-section-title i { color: #FF8C00; }
+
+.cdt-checker-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: end; }
+.cdt-input-group { display: flex; flex-direction: column; gap: 6px; }
+.cdt-label { font-size: 13px; font-weight: 600; color: #666; }
+
+.cdt-input-prefix {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    font-weight: 700; color: #FF8C00; font-size: 15px; pointer-events: none;
+}
+.cdt-input-group { position: relative; }
+.cdt-input-group .cdt-input { padding-left: 48px; }
+
+.cdt-input {
+    width: 100%; padding: 12px 16px; border: 2px solid #eee;
+    border-radius: 10px; font-size: 15px; color: #2D2D2D;
+    transition: border-color 0.2s;
+}
+.cdt-input:focus { border-color: #FF8C00; box-shadow: 0 0 0 3px rgba(255,140,0,0.12); outline: none; }
+
+.cdt-btn-primary {
+    padding: 12px 28px; background: linear-gradient(135deg, #FF8C00, #FF5252);
+    color: #fff; border: none; border-radius: 10px; font-size: 15px;
+    font-weight: 600; cursor: pointer; display: flex; align-items: center;
+    gap: 8px; white-space: nowrap; box-shadow: 0 4px 12px rgba(255,140,0,0.35);
+    transition: all 0.2s;
+}
+.cdt-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,140,0,0.45); }
+
+/* 查询结果 */
+.cdt-check-result { margin-top: 20px; padding: 20px; border-radius: 12px; }
+.cdt-result-limited { background: #FFF3F3; border: 2px solid #FFCDD2; }
+.cdt-result-free    { background: #F1F8E9; border: 2px solid #C8E6C9; }
+.cdt-result-title   { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.cdt-result-limited .cdt-result-title { color: #C62828; }
+.cdt-result-free    .cdt-result-title { color: #2E7D32; }
+.cdt-result-desc    { font-size: 14px; color: #555; line-height: 1.7; }
+
+/* 近7天预览 */
+.cdt-preview-card { padding: 28px; }
+.cdt-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+.cdt-day-item {
+    text-align: center; padding: 14px 8px; border-radius: 12px;
+    border: 2px solid #eee; transition: all 0.2s;
+}
+.cdt-day-item.is-today { border-color: #FF8C00; background: #FFF8F0; }
+.cdt-day-item.is-weekend { background: #F1F8E9; border-color: #C8E6C9; }
+.cdt-day-label { font-size: 13px; font-weight: 700; color: #2D2D2D; margin-bottom: 4px; }
+.cdt-day-date  { font-size: 12px; color: #999; margin-bottom: 10px; }
+.cdt-day-nums  { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.cdt-day-num   { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,#FF5252,#FF1744); color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.cdt-day-free  { font-size: 13px; color: #2E7D32; font-weight: 600; }
+
+/* 规则表格 */
+.cdt-rules-card { padding: 28px; }
+.cdt-rules-table-wrap { overflow-x: auto; margin-bottom: 16px; }
+.cdt-rules-table { width: 100%; border-collapse: collapse; }
+.cdt-rules-table th, .cdt-rules-table td { padding: 12px 16px; border: 1px solid #eee; font-size: 14px; text-align: center; }
+.cdt-rules-table th { background: #FFF8F0; font-weight: 700; color: #2D2D2D; }
+.cdt-rules-table tr:hover td { background: #FFFBF7; }
+.cdt-rule-nums { font-size: 16px; font-weight: 700; color: #FF5252; }
+
+.cdt-disclaimer { font-size: 13px; color: #999; display: flex; align-items: flex-start; gap: 6px; line-height: 1.6; }
+.cdt-disclaimer i { color: #FF8C00; margin-top: 2px; flex-shrink: 0; }
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .cdt-checker-form { grid-template-columns: 1fr; }
+    .cdt-week-grid { grid-template-columns: repeat(4, 1fr); }
+    .cdt-num-circle { width: 64px; height: 64px; font-size: 28px; }
+}
+@media (max-width: 480px) {
+    .cdt-week-grid { grid-template-columns: repeat(3, 1fr); }
+    .cdt-today-header { padding: 20px; }
+}
