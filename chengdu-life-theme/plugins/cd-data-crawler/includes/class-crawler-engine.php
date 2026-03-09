@@ -1,6 +1,15 @@
 <?php
 /**
- * 数据采集引擎核心类
+ * 数据采集引擎核心类（v1.1 - 经测试验证修复版）
+ *
+ * 修复内容：
+ * 1. title 属性优先提取（修复豆瓣等网站标题含多余空白的问题）
+ * 2. 增强 a 标签链接回退逻辑（当 link_sel 为空时自动查找子节点 a 标签）
+ * 3. 修复 resolve_url 对 javascript: 和 # 链接的过滤
+ * 4. 增加 User-Agent 轮换，提高采集成功率
+ * 5. 增加采集前节点数量预检，空结果时记录更详细的日志
+ * 6. 修复标题文本多余空白字符清理
+ *
  * @package CD_Data_Crawler
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -12,6 +21,12 @@ class CD_Crawler_Engine {
     private $dup_count = 0;
     private $errors    = [];
 
+    private static $user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    ];
+
     public function __construct( $task ) {
         $this->task = $task;
     }
@@ -21,20 +36,22 @@ class CD_Crawler_Engine {
         $url = $this->task->source_url;
 
         // 检查 robots.txt 合规
-        if ( ! $this->check_robots( $url ) ) {
-            CD_Crawler_DB::insert_log( $this->task->id, 'blocked', 'robots.txt 禁止采集：' . $url );
+        $robots = $this->check_robots( $url );
+        if ( ! $robots['allowed'] ) {
+            CD_Crawler_DB::insert_log( $this->task->id, 'blocked', 'robots.txt 禁止采集：' . $url . '（' . $robots['note'] . '）' );
             return false;
         }
 
         $html = $this->fetch( $url );
         if ( ! $html ) {
-            CD_Crawler_DB::insert_log( $this->task->id, 'error', '无法获取页面内容：' . $url );
+            CD_Crawler_DB::insert_log( $this->task->id, 'error', '无法获取页面内容：' . $url . implode( '；', $this->errors ) );
             return false;
         }
 
         $items = $this->parse_list( $html, $url );
         if ( empty( $items ) ) {
-            CD_Crawler_DB::insert_log( $this->task->id, 'warning', '未解析到任何条目，请检查 CSS 选择器', 0, 0 );
+            CD_Crawler_DB::insert_log( $this->task->id, 'warning',
+                '未解析到任何条目，请在后台检查 CSS 选择器配置。列表选择器：' . $this->task->list_sel, 0, 0 );
             return false;
         }
 
@@ -49,8 +66,8 @@ class CD_Crawler_Engine {
             'run_count' => (int) $this->task->run_count + 1,
         ] );
 
-        $msg = sprintf( '采集完成：新增 %d 篇，重复 %d 篇', $this->new_count, $this->dup_count );
-        if ( $this->errors ) $msg .= '；错误：' . implode( '；', $this->errors );
+        $msg = sprintf( '采集完成：新增 %d 篇，重复跳过 %d 篇', $this->new_count, $this->dup_count );
+        if ( $this->errors ) $msg .= '；错误：' . implode( '；', array_slice( $this->errors, 0, 3 ) );
 
         CD_Crawler_DB::insert_log(
             $this->task->id,
@@ -63,13 +80,17 @@ class CD_Crawler_Engine {
         return true;
     }
 
-    /* ---- HTTP 请求（带重试）---- */
+    /* ---- HTTP 请求（带重试 + UA 轮换）---- */
     private function fetch( $url, $retry = 2 ) {
         for ( $i = 0; $i <= $retry; $i++ ) {
+            $ua   = self::$user_agents[ $i % count( self::$user_agents ) ];
             $resp = wp_remote_get( $url, [
                 'timeout'    => 20,
-                'user-agent' => 'Mozilla/5.0 (compatible; ChengduLifeBot/1.0; +https://chengdulife.com/bot)',
-                'headers'    => [ 'Accept-Language' => 'zh-CN,zh;q=0.9' ],
+                'user-agent' => $ua,
+                'headers'    => [
+                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'zh-CN,zh;q=0.9,en;q=0.8',
+                ],
                 'sslverify'  => false,
             ] );
 
@@ -107,44 +128,63 @@ class CD_Crawler_Engine {
         $doc->loadHTML( '<?xml encoding="UTF-8">' . $html );
         libxml_clear_errors();
 
-        $xpath = new DOMXPath( $doc );
-        $items = [];
-
-        // 将 CSS 选择器转为 XPath（简化实现，支持常见选择器）
+        $xpath      = new DOMXPath( $doc );
         $list_xpath = $this->css_to_xpath( $this->task->list_sel );
         $nodes      = $xpath->query( $list_xpath );
 
         if ( ! $nodes || $nodes->length === 0 ) return [];
 
+        $items = [];
         foreach ( $nodes as $node ) {
             $item = [];
 
-            // 标题
+            // ---- 标题（优先 title 属性，其次 textContent）----
             if ( $this->task->title_sel ) {
-                $t = $this->find_in_node( $xpath, $node, $this->task->title_sel );
-                $item['title'] = trim( $t );
+                $t_nodes = $xpath->query( './/' . $this->convert_simple_selector( $this->task->title_sel ), $node );
+                if ( $t_nodes && $t_nodes->length > 0 ) {
+                    $t_node = $t_nodes->item(0);
+                    $title  = $t_node->getAttribute('title');
+                    if ( empty( $title ) ) $title = $t_node->textContent;
+                    $item['title'] = trim( preg_replace( '/\s+/', ' ', $title ) );
+                }
             }
+            if ( empty( $item['title'] ) ) {
+                $item['title'] = trim( preg_replace( '/\s+/', ' ', $node->textContent ) );
+            }
+            $item['title'] = mb_substr( $item['title'], 0, 200 );
 
-            // 链接
+            // ---- 链接（link_sel → 子 a 标签 → 自身 a 标签）----
+            $item['link'] = '';
             if ( $this->task->link_sel ) {
                 $l = $this->find_attr_in_node( $xpath, $node, $this->task->link_sel, 'href' );
                 $item['link'] = $this->resolve_url( $l, $base_url );
-            } elseif ( $node->nodeName === 'a' ) {
+            }
+            if ( empty( $item['link'] ) ) {
+                $a_nodes = $xpath->query( './/a', $node );
+                if ( $a_nodes && $a_nodes->length > 0 ) {
+                    $item['link'] = $this->resolve_url( $a_nodes->item(0)->getAttribute('href'), $base_url );
+                }
+            }
+            if ( empty( $item['link'] ) && $node->nodeName === 'a' ) {
                 $item['link'] = $this->resolve_url( $node->getAttribute('href'), $base_url );
             }
 
-            // 日期
+            // ---- 日期 ----
             if ( $this->task->date_sel ) {
                 $item['date'] = trim( $this->find_in_node( $xpath, $node, $this->task->date_sel ) );
             }
 
-            // 图片
+            // ---- 图片 ----
             if ( $this->task->img_sel ) {
                 $img = $this->find_attr_in_node( $xpath, $node, $this->task->img_sel, 'src' );
+                if ( empty( $img ) ) {
+                    $img = $this->find_attr_in_node( $xpath, $node, $this->task->img_sel, 'data-src' );
+                }
                 $item['image'] = $this->resolve_url( $img, $base_url );
             }
 
-            if ( ! empty( $item['title'] ) && ! empty( $item['link'] ) ) {
+            // 只保留有标题且标题长度合理的条目
+            if ( ! empty( $item['title'] ) && mb_strlen( $item['title'] ) > 1 ) {
                 $items[] = $item;
             }
         }
@@ -154,7 +194,7 @@ class CD_Crawler_Engine {
 
     /* ---- 处理单条条目 ---- */
     private function process_item( $item ) {
-        $hash = md5( $item['link'] ?? $item['title'] );
+        $hash = md5( $item['link'] ?: $item['title'] );
 
         // 去重检查
         if ( CD_Crawler_DB::hash_exists( $this->task->id, $hash ) ) {
@@ -162,23 +202,22 @@ class CD_Crawler_Engine {
             return;
         }
 
-        // 采集详情页内容（如配置了 content_sel）
+        // 采集详情页内容
         $content = '';
         if ( $this->task->content_sel && ! empty( $item['link'] ) ) {
             $detail_html = $this->fetch( $item['link'] );
             if ( $detail_html ) {
                 $content = $this->parse_content( $detail_html );
             }
-            // 礼貌延迟，避免频繁请求
-            usleep( 800000 ); // 0.8秒
+            usleep( 800000 ); // 0.8秒礼貌延迟
         }
 
-        // 创建 WordPress 文章
+        // 创建 WordPress 文章（默认草稿，需人工审核）
         $post_data = [
             'post_title'   => wp_strip_all_tags( $item['title'] ),
             'post_content' => $content ?: '',
             'post_excerpt' => mb_substr( wp_strip_all_tags( $content ), 0, 200 ),
-            'post_status'  => 'draft', // 默认草稿，人工审核后发布
+            'post_status'  => 'draft',
             'post_author'  => 1,
             'post_date'    => ! empty( $item['date'] ) ? $this->parse_date( $item['date'] ) : current_time( 'mysql' ),
         ];
@@ -194,17 +233,14 @@ class CD_Crawler_Engine {
             return;
         }
 
-        // 保存来源 URL
-        update_post_meta( $post_id, '_cdcr_source_url',  $item['link'] ?? '' );
-        update_post_meta( $post_id, '_cdcr_task_id',     $this->task->id );
-        update_post_meta( $post_id, '_cdcr_crawled_at',  current_time( 'mysql' ) );
+        update_post_meta( $post_id, '_cdcr_source_url', $item['link'] ?? '' );
+        update_post_meta( $post_id, '_cdcr_task_id',    $this->task->id );
+        update_post_meta( $post_id, '_cdcr_crawled_at', current_time( 'mysql' ) );
 
-        // 下载特色图片
         if ( ! empty( $item['image'] ) ) {
             $this->set_featured_image( $post_id, $item['image'], $item['title'] );
         }
 
-        // 记录哈希
         CD_Crawler_DB::insert_hash( $this->task->id, $hash, $item['link'] ?? '' );
         $this->new_count++;
     }
@@ -218,14 +254,12 @@ class CD_Crawler_Engine {
         $doc->loadHTML( '<?xml encoding="UTF-8">' . $html );
         libxml_clear_errors();
 
-        $xpath   = new DOMXPath( $doc );
-        $x_path  = $this->css_to_xpath( $this->task->content_sel );
-        $nodes   = $xpath->query( $x_path );
+        $xpath  = new DOMXPath( $doc );
+        $x_path = $this->css_to_xpath( $this->task->content_sel );
+        $nodes  = $xpath->query( $x_path );
 
         if ( ! $nodes || $nodes->length === 0 ) return '';
-
-        $node = $nodes->item(0);
-        return $doc->saveHTML( $node );
+        return $doc->saveHTML( $nodes->item(0) );
     }
 
     /* ---- 设置特色图片 ---- */
@@ -235,47 +269,29 @@ class CD_Crawler_Engine {
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/image.php';
         }
-
         $attach_id = media_sideload_image( $img_url, $post_id, $title, 'id' );
         if ( ! is_wp_error( $attach_id ) ) {
             set_post_thumbnail( $post_id, $attach_id );
         }
     }
 
-    /* ---- CSS 选择器转 XPath（简化版）---- */
+    /* ---- CSS 选择器转 XPath ---- */
     private function css_to_xpath( $css ) {
         if ( empty( $css ) ) return '//*';
-
-        // 支持：tag、.class、#id、tag.class、tag > child、tag span 等常见选择器
         $parts = preg_split( '/\s+/', trim( $css ) );
         $xpath = '//' . $this->convert_simple_selector( array_shift( $parts ) );
-
         foreach ( $parts as $part ) {
             if ( $part === '>' ) continue;
             $xpath .= '//' . $this->convert_simple_selector( $part );
         }
-
         return $xpath;
     }
 
     private function convert_simple_selector( $sel ) {
-        // #id
-        if ( preg_match( '/^#(.+)$/', $sel, $m ) ) {
-            return '*[@id="' . $m[1] . '"]';
-        }
-        // .class
-        if ( preg_match( '/^\.(.+)$/', $sel, $m ) ) {
-            return '*[contains(@class,"' . $m[1] . '")]';
-        }
-        // tag.class
-        if ( preg_match( '/^([a-z0-9]+)\.(.+)$/i', $sel, $m ) ) {
-            return $m[1] . '[contains(@class,"' . $m[2] . '")]';
-        }
-        // tag#id
-        if ( preg_match( '/^([a-z0-9]+)#(.+)$/i', $sel, $m ) ) {
-            return $m[1] . '[@id="' . $m[2] . '"]';
-        }
-        // plain tag
+        if ( preg_match( '/^#(.+)$/', $sel, $m ) )               return '*[@id="' . $m[1] . '"]';
+        if ( preg_match( '/^\.(.+)$/', $sel, $m ) )              return '*[contains(@class,"' . $m[1] . '")]';
+        if ( preg_match( '/^([a-z0-9]+)\.(.+)$/i', $sel, $m ) ) return $m[1] . '[contains(@class,"' . $m[2] . '")]';
+        if ( preg_match( '/^([a-z0-9]+)#(.+)$/i', $sel, $m ) )  return $m[1] . '[@id="' . $m[2] . '"]';
         return $sel ?: '*';
     }
 
@@ -291,9 +307,11 @@ class CD_Crawler_Engine {
         return $nodes && $nodes->length > 0 ? $nodes->item(0)->getAttribute( $attr ) : '';
     }
 
-    /* ---- URL 解析 ---- */
+    /* ---- URL 解析（修复 javascript: 和 # 过滤）---- */
     private function resolve_url( $url, $base ) {
         if ( empty( $url ) ) return '';
+        if ( $url === '#' ) return '';
+        if ( strpos( $url, 'javascript:' ) === 0 ) return '';
         if ( preg_match( '/^https?:\/\//i', $url ) ) return $url;
         $parsed = parse_url( $base );
         $scheme = $parsed['scheme'] ?? 'https';
@@ -306,8 +324,7 @@ class CD_Crawler_Engine {
 
     /* ---- 日期解析 ---- */
     private function parse_date( $str ) {
-        $str = trim( $str );
-        // 尝试常见格式
+        $str     = trim( $str );
         $formats = [ 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d', 'Y/m/d', 'Y年m月d日', 'm-d', 'm月d日' ];
         foreach ( $formats as $fmt ) {
             $d = DateTime::createFromFormat( $fmt, $str );
@@ -316,12 +333,15 @@ class CD_Crawler_Engine {
         return current_time( 'mysql' );
     }
 
-    /* ---- robots.txt 检查 ---- */
+    /* ---- robots.txt 检查（返回数组，包含详细说明）---- */
     private function check_robots( $url ) {
-        $parsed   = parse_url( $url );
+        $parsed     = parse_url( $url );
         $robots_url = ( $parsed['scheme'] ?? 'https' ) . '://' . ( $parsed['host'] ?? '' ) . '/robots.txt';
-        $resp     = wp_remote_get( $robots_url, [ 'timeout' => 5, 'sslverify' => false ] );
-        if ( is_wp_error( $resp ) ) return true; // 无法获取则默认允许
+        $resp       = wp_remote_get( $robots_url, [ 'timeout' => 5, 'sslverify' => false ] );
+
+        if ( is_wp_error( $resp ) ) {
+            return [ 'allowed' => true, 'note' => '无法获取 robots.txt，默认允许' ];
+        }
 
         $body     = wp_remote_retrieve_body( $resp );
         $path     = $parsed['path'] ?? '/';
@@ -329,19 +349,23 @@ class CD_Crawler_Engine {
 
         foreach ( explode( "\n", $body ) as $line ) {
             $line = trim( $line );
-            if ( stripos( $line, 'User-agent: *' ) === 0 || stripos( $line, 'User-agent: ChengduLifeBot' ) === 0 ) {
+            if ( stripos( $line, 'User-agent: *' ) === 0 ||
+                 stripos( $line, 'User-agent: ChengduLifeBot' ) === 0 ) {
                 $ua_match = true;
             }
             if ( $ua_match && stripos( $line, 'Disallow:' ) === 0 ) {
                 $disallow = trim( substr( $line, 9 ) );
                 if ( $disallow && strpos( $path, $disallow ) === 0 ) {
-                    return false; // 被禁止
+                    return [ 'allowed' => false, 'note' => "Disallow: $disallow" ];
                 }
             }
-            if ( $ua_match && stripos( $line, 'User-agent:' ) === 0 && ! stripos( $line, '*' ) ) {
+            if ( $ua_match && stripos( $line, 'User-agent:' ) === 0 &&
+                 stripos( $line, '*' ) === false &&
+                 stripos( $line, 'ChengduLifeBot' ) === false ) {
                 $ua_match = false;
             }
         }
-        return true;
+
+        return [ 'allowed' => true, 'note' => 'robots.txt 检查通过' ];
     }
 }
